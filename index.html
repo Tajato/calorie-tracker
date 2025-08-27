@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calorie Tracker Pro</title>
+    <title>Calorie Tracker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <style>
         * {
@@ -452,7 +452,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>💪 Calorie Tracker</h1>
+            <h1>💪 CalTracker Pro</h1>
             <p>Track calories, macros & reach your goals</p>
         </div>
 
@@ -524,10 +524,28 @@
         <div class="card">
             <div class="scan-section">
                 <button class="scan-btn" id="startScan">📱 Scan Barcode</button>
+                
+                <!-- Test barcode input for debugging -->
+                <div style="margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 8px; font-size: 0.8rem;">
+                    <p style="margin-bottom: 5px; color: #666;">Having trouble scanning? Try these test barcodes:</p>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button onclick="lookupProduct('737628064502')" style="background: #667eea; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Honey Nut Cheerios</button>
+                        <button onclick="lookupProduct('028400064057')" style="background: #667eea; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Coca Cola</button>
+                        <button onclick="lookupProduct('041780003508')" style="background: #667eea; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Red Apple</button>
+                    </div>
+                    <input type="text" id="testBarcode" placeholder="Or enter barcode manually" style="width: 70%; margin: 5px 0; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.8rem;">
+                    <button onclick="lookupProduct(document.getElementById('testBarcode').value)" style="background: #4ecdc4; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Test Lookup</button>
+                </div>
+                
                 <div class="scanner-container" id="scannerContainer">
                     <button class="close-scanner" id="closeScanner">✕</button>
                     <div id="scanner"></div>
-                    <div class="scanner-overlay"></div>
+                    <div class="scanner-overlay">
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 100px; border: 2px solid #ff6b6b; background: rgba(255, 107, 107, 0.1);"></div>
+                        <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 6px; font-size: 0.8rem;">
+                            Position barcode in the box above
+                        </div>
+                    </div>
                 </div>
                 <div id="status"></div>
             </div>
@@ -565,8 +583,15 @@
         <!-- Food Log -->
         <div class="card">
             <div class="food-log">
-                <h3>Today's Food Log</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>Today's Food Log</h3>
+                    <button onclick="clearTodaysLog()" style="background: #ff6b6b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">Clear Today</button>
+                </div>
                 <div id="foodList"></div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; text-align: center;">
+                    <button onclick="exportData()" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">📥 Export Data</button>
+                    <p style="font-size: 0.7rem; color: #999; margin-top: 8px;">Data automatically resets each day at midnight</p>
+                </div>
             </div>
         </div>
     </div>
@@ -620,44 +645,96 @@
         });
 
         function startScanner() {
-            showStatus('Starting camera...', 'loading');
+            showStatus('Requesting camera access...', 'loading');
             scannerContainer.style.display = 'block';
             scannerActive = true;
             startScanBtn.disabled = true;
 
+            // Enhanced scanner configuration
             Quagga.init({
                 inputStream: {
                     name: "Live",
                     type: "LiveStream",
                     target: document.querySelector('#scanner'),
                     constraints: {
-                        width: 350,
-                        height: 280,
-                        facingMode: "environment"
+                        width: { min: 320, ideal: 640, max: 800 },
+                        height: { min: 240, ideal: 480, max: 600 },
+                        facingMode: "environment", // Use back camera
+                        aspectRatio: { min: 1, max: 100 },
+                        frameRate: { min: 10, max: 30 }
                     },
+                    area: { // Define scanning area
+                        top: "20%",
+                        right: "10%", 
+                        left: "10%",
+                        bottom: "20%"
+                    },
+                    singleChannel: false
                 },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: 2,
+                frequency: 10,
                 decoder: {
                     readers: [
-                        "code_128_reader",
                         "ean_reader",
-                        "ean_8_reader",
+                        "ean_8_reader", 
+                        "ean_5_reader",
+                        "code_128_reader",
                         "code_39_reader",
-                        "code_39_vin_reader",
-                        "codabar_reader",
                         "upc_reader",
-                        "upc_e_reader"
-                    ]
+                        "upc_e_reader",
+                        "i2of5_reader"
+                    ],
+                    debug: {
+                        showCanvas: false,
+                        showPatches: false,
+                        showFoundPatches: false,
+                        showSkeleton: false,
+                        showLabels: false,
+                        showPatchLabels: false,
+                        showRemainingPatchLabels: false,
+                        boxFromPatches: {
+                            showTransformed: false,
+                            showTransformedBox: false,
+                            showBB: false
+                        }
+                    }
                 },
+                locate: true
             }, function(err) {
                 if (err) {
-                    console.log(err);
-                    showStatus('Camera access denied or unavailable', 'error');
+                    console.error('Scanner initialization error:', err);
+                    let errorMsg = 'Scanner initialization failed';
+                    
+                    if (err.name === 'NotAllowedError') {
+                        errorMsg = 'Camera access denied. Please allow camera permissions and try again.';
+                    } else if (err.name === 'NotFoundError') {
+                        errorMsg = 'No camera found on this device';
+                    } else if (err.name === 'NotSupportedError') {
+                        errorMsg = 'Camera not supported on this device';
+                    } else if (err.name === 'NotReadableError') {
+                        errorMsg = 'Camera is in use by another application';
+                    }
+                    
+                    showStatus(errorMsg, 'error');
                     stopScanner();
                     return;
                 }
                 
-                showStatus('Point camera at barcode', 'loading');
-                Quagga.start();
+                console.log('Scanner initialized successfully');
+                showStatus('Camera ready! Point at barcode and hold steady', 'loading');
+                
+                try {
+                    Quagga.start();
+                    console.log('Scanner started');
+                } catch (startErr) {
+                    console.error('Scanner start error:', startErr);
+                    showStatus('Failed to start camera', 'error');
+                    stopScanner();
+                }
             });
         }
 
@@ -671,12 +748,52 @@
             }
         }
 
-        // Barcode detection
+        // Enhanced barcode detection with better feedback
+        Quagga.onProcessed(function(result) {
+            var drawingCtx = Quagga.canvas.ctx.overlay,
+                drawingCanvas = Quagga.canvas.dom.overlay;
+
+            if (result) {
+                if (result.boxes) {
+                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                    result.boxes.filter(function (box) {
+                        return box !== result.box;
+                    }).forEach(function (box) {
+                        Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+                    });
+                }
+
+                if (result.box) {
+                    Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+                }
+
+                if (result.codeResult && result.codeResult.code) {
+                    Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+                }
+            }
+        });
+
+        // Barcode detection with validation
         Quagga.onDetected(function(data) {
             const barcode = data.codeResult.code;
-            showStatus('Barcode detected! Looking up product...', 'loading');
-            stopScanner();
-            lookupProduct(barcode);
+            const format = data.codeResult.format;
+            
+            console.log('Barcode detected:', barcode, 'Format:', format);
+            
+            // Validate barcode length and format
+            if (barcode && barcode.length >= 8) {
+                showStatus(`Barcode detected: ${barcode}`, 'success');
+                
+                // Add a small delay to show the success message
+                setTimeout(() => {
+                    showStatus('Looking up product...', 'loading');
+                    stopScanner();
+                    lookupProduct(barcode);
+                }, 1000);
+            } else {
+                console.log('Invalid barcode detected:', barcode);
+                showStatus('Invalid barcode detected, keep trying...', 'error');
+            }
         });
 
         // Product lookup with enhanced macro extraction
@@ -885,33 +1002,98 @@
             status.innerHTML = '';
         }
 
-        // Storage functions
+        // Storage functions with localStorage fallback
         function saveUserProfile() {
-            window.userProfileData = userProfile;
+            try {
+                localStorage.setItem('calorieTracker_userProfile', JSON.stringify(userProfile));
+            } catch (e) {
+                // Fallback to memory storage if localStorage isn't available
+                window.userProfileData = userProfile;
+            }
         }
 
         function loadUserProfile() {
-            const saved = window.userProfileData;
-            if (saved) {
-                userProfile = { ...userProfile, ...saved };
+            try {
+                const saved = localStorage.getItem('calorieTracker_userProfile');
+                if (saved) {
+                    userProfile = { ...userProfile, ...JSON.parse(saved) };
+                }
+            } catch (e) {
+                // Fallback to memory storage
+                const saved = window.userProfileData;
+                if (saved) {
+                    userProfile = { ...userProfile, ...saved };
+                }
             }
         }
 
         function saveFoodLog() {
             const today = new Date().toDateString();
             const data = { date: today, foods: foodLog };
-            window.calorieTrackerData = data;
+            try {
+                localStorage.setItem('calorieTracker_foodLog', JSON.stringify(data));
+            } catch (e) {
+                // Fallback to memory storage
+                window.calorieTrackerData = data;
+            }
         }
 
         function loadFoodLog() {
             const today = new Date().toDateString();
-            const data = window.calorieTrackerData;
+            let data = null;
             
+            try {
+                const saved = localStorage.getItem('calorieTracker_foodLog');
+                if (saved) {
+                    data = JSON.parse(saved);
+                }
+            } catch (e) {
+                // Fallback to memory storage
+                data = window.calorieTrackerData;
+            }
+            
+            // Check if data is from today, if not start fresh
             if (data && data.date === today) {
                 foodLog = data.foods || [];
             } else {
                 foodLog = [];
+                // If it's a new day, save the empty log immediately
+                if (data && data.date !== today) {
+                    saveFoodLog();
+                    showStatus(`New day started! Previous log cleared.`, 'success');
+                }
             }
+        }
+
+        // Function to manually clear today's log (useful for testing or reset)
+        function clearTodaysLog() {
+            if (confirm('Are you sure you want to clear today\'s food log?')) {
+                foodLog = [];
+                saveFoodLog();
+                updateDisplay();
+                showStatus('Today\'s food log cleared!', 'success');
+            }
+        }
+
+        // Function to export/backup data (useful for users)
+        function exportData() {
+            const exportData = {
+                profile: userProfile,
+                foodLog: {
+                    date: new Date().toDateString(),
+                    foods: foodLog
+                },
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `calorie-tracker-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
         }
 
         // Prevent scanner from running when page is hidden
